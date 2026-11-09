@@ -1,0 +1,22 @@
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: What is committed (no firmware, photos, private paths)
+        run: python3 tools/repo_check.py
+      - name: Recipe tests (no firmware needed)
+        run: python3 -m unittest discover -s tests -v
+      - name: Everything compiles
+        run: python3 -m compileall -q tools palette research tests

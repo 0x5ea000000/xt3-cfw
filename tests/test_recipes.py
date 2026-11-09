@@ -1,0 +1,65 @@
+"""Recipe tests that need no firmware: structure, pins, and that steps cannot overlap or run outside the image.
+
+With XT3_RECOVERY_ZIP set to FujiMod's X-T3 5.11 recovery zip, also builds everything and checks the pinned outputs.
+Run: python3 -m unittest discover -s tests
+"""
+import base64, json, lzma, os, sys, tempfile, unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+import xt3_build as X  # noqa: E402
+
+RECIPES = ROOT / 'firmware' / 'recipes'
+CARD_FILES = {'standard/ffboot.bin', 'standard/ffinit.bin', 'fast/ffboot.bin', 'fast/ffinit.bin', 'fast-loader.bin'}
+
+
+def load(name):
+    return X.load_recipe(RECIPES / name)
+
+
+def spans(r):
+    out = []
+    for op in r['ops']:
+        n = len(base64.b64decode(op['data'])) if op['op'] == 'own' else op['n']
+        out.append((op['at'], op['at'] + n, op['op']))
+    return sorted(out)
+
+
+class Recipes(unittest.TestCase):
+    def test_firmware_recipe(self):
+        r = load('p02f.json.xz')
+        self.assertEqual(r['base']['sha256'], X.FUJIMOD['ffboot.bin'])
+        self.assertEqual(set(r['outputs']), CARD_FILES)
+        self.assertTrue((RECIPES / r['fast_loader']).exists())
+        s = spans(r)
+        for (a0, a1, _), (b0, _, _) in zip(s, s[1:]):
+            self.assertLessEqual(a1, b0, 'steps overlap')
+        self.assertTrue(all(0 <= a and b <= r['target']['size'] for a, b, _ in s))
+        for op in r['ops']:
+            if op['op'] == 'copy':                            # copies come from the official image itself, never past it
+                self.assertLessEqual(op['src'] + op['n'], r['base']['size'])
+            if op['op'] == 'own' and op['at'] < r['base']['size'] and 'old' not in op:
+                self.assertTrue(0x1509000 <= op['at'] < 0x1523000, f'own bytes on official code at {op["at"]:#x} without an old-bytes check')
+
+    def test_loader_recipe(self):
+        r = load('fast-loader.json.xz')
+        self.assertEqual(r['base']['sha256'], X.FUJIMOD['ffinit.bin'])
+        self.assertEqual(r['target']['size'], r['base']['size'])
+        self.assertTrue(all(op['op'] == 'own' for op in r['ops']))
+
+    def test_fast_table_fits(self):
+        img = bytes(0x1000) + b'\1' * 0x1000 + bytes(0x20000) + b'\2' * 0x2000
+        fi, small = X.fast_pair(bytes(40808), img)
+        self.assertEqual(len(small), 0x1000 + 0x1000 + 0x2000)
+
+    @unittest.skipUnless(os.environ.get('XT3_RECOVERY_ZIP'), 'set XT3_RECOVERY_ZIP to also build from FujiMod\'s recovery zip')
+    def test_full_build(self):
+        with tempfile.TemporaryDirectory() as d:
+            X.build(os.environ['XT3_RECOVERY_ZIP'], Path(d) / 'out', RECIPES / 'p02f.json.xz')
+            sums = (Path(d) / 'out' / 'SHA256SUMS').read_text().split('\n')
+            self.assertEqual(len([s for s in sums if s]), len(CARD_FILES))
+
+
+if __name__ == '__main__':
+    unittest.main()

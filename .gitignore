@@ -1,0 +1,13 @@
+# Firmware never goes in git: your recovery zip, everything tools/xt3_build.py makes, and any card files.
+/build/
+*.zip
+*.DAT
+*.bin
+*.RAF
+*.raf
+# Your looks and Palette's working files
+/palette/library/
+/palette/data/
+/palette/.venv/
+/sample_photos/
+__pycache__/
