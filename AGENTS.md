@@ -18,7 +18,7 @@ This repository adds film rows to the Fujifilm X-T3, firmware 5.11, by SD boot. 
 | --- | --- |
 | `tools/xt3_build.py` | Builds the card files from the user's recovery zip and a recipe; checks everything |
 | `tools/film_icons.py`, `tools/gvff.py` | Row icons: stock canister templates from the image, Lato Bold letters |
-| `firmware/recipes/` | The tested firmware as recipes (`p02f.json.xz`) and the fast loader (`fast-loader.json.xz`) |
+| `firmware/recipes/` | The tested firmware as a recipe (`firmware.json.xz`) and the fast loader (`fast-loader.json.xz`) |
 | `palette/` | Local web app: fit looks from photos, build card files (data only, never code) |
 | `research/` | The look-fitting model Palette runs |
 | `docs/` | How it works, Palette guide |

@@ -22,7 +22,7 @@ Serves `http://127.0.0.1:8877`, on your own computer only (set `PALETTE_HOST` or
 ## Rules it enforces
 
 - **Data only.** A build is the approved engine image with the store (tables and icons), the store's sum word, the icon records, row text (names in the film-name style, `name_style` 2) and, to show fewer rows, list terminators replaced. RAW CONVERSION's list copy (`raw_list` in `engine.json`) keeps its keys and rows in step; any extra rows in it move up to follow the last shown row. `engine.check_diff` compares every byte and refuses a change anywhere else.
-- **Engine: P02f**, the official X-T3 5.11 image with our 16 rows, made by `tools/xt3_build.py` into `build/` (`09185227…`). Build it first.
+- **Engine: P03**, the official X-T3 5.11 image with our 16 rows, made by `tools/xt3_build.py` into `build/` (`b8a254d5…`). Build it first.
 - **The store sum follows the tables.** The camera checks it on every shot and turns the row cyan if it is wrong, so each build verifies it before writing anything.
 - **Rule 3 at startup.** The app reads the engine image's own 16 rows, with their icons, out of the image, rebuilds it and requires byte equality, or it will not build.
 - **No DAT path, no card writes.** It produces two files for the user to copy. A test fails if a DAT or device path appears in the code.

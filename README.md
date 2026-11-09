@@ -5,6 +5,7 @@ Custom firmware (cfw) for the Fujifilm X-T3: your own film simulations as extra 
 - **16 extra rows** after the stock films, each with its own name, description and film-canister icon, in the film list, the Q menu and the I.Q. menu.
 - Each row is a **colour table** (16×16×16) applied to JPEGs and live view. Live view previews a row while you highlight it.
 - **RAW CONVERSION** in the camera lists the rows too.
+- **Photos remember their row**: the row's icon shows on playback and on the shooting info screens, and an in-camera RAW conversion of a row photo uses that row.
 - **Palette**, a local web app, fits a look from your own photos (camera JPEGs and the same RAWs exported with your Lightroom profile) and makes the card files.
 - **Fast SD boot**: about 5 seconds from power-on to the shooting screen (a standard card takes about 95 s).
 
@@ -50,11 +51,12 @@ The build starts from your official image and applies a recipe in `firmware/reci
 | What | Evidence |
 | --- | --- |
 | Boots; 16 rows with names, descriptions and icons; live preview; photos; RAW CONVERSION | camera, official 5.11 inside, standard and fast card |
+| Row icons on playback and shooting info screens; photos marked with their row; RAW CONVERSION of a row photo as its row | camera |
 | Palette builds with fewer rows (9 looks) | camera |
 | Every output of `tools/xt3_build.py` equals the tested files | checked on every build |
 | Fast loader on cards with files in pieces (exFAT, FAT32) | emulator |
 
-Not there yet: row icons on the playback and shooting info screens, photos tagged with their row, Classic Negative, Bleach Bypass, large grain.
+Not there yet: Classic Negative, Bleach Bypass, large grain.
 
 ## Safety
 

@@ -11,7 +11,7 @@ Output (each pinned by SHA-256, so the result is exactly the firmware tested on 
   fast/ffboot.bin, fast/ffinit.bin           the image without its long zero runs, our fast loader; boots in about 5 s
 Both need Fn1 + rear dial at power-on on a camera with official firmware. Nothing here writes to a card or the camera.
 
-Usage: python3 tools/xt3_build.py build <recovery zip> <new output dir> [--recipe firmware/recipes/p02f.json.xz]
+Usage: python3 tools/xt3_build.py build <recovery zip> <new output dir> [--recipe firmware/recipes/firmware.json.xz]
        python3 tools/xt3_build.py info [--recipe ...]
 """
 import argparse, base64, hashlib, json, lzma, re, struct, sys, zipfile, zlib
@@ -158,8 +158,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     sub = ap.add_subparsers(dest='cmd', required=True)
     b = sub.add_parser('build'); b.add_argument('zip'); b.add_argument('out')
-    b.add_argument('--recipe', default=str(RECIPES / 'p02f.json.xz'))
-    i = sub.add_parser('info'); i.add_argument('--recipe', default=str(RECIPES / 'p02f.json.xz'))
+    b.add_argument('--recipe', default=str(RECIPES / 'firmware.json.xz'))
+    i = sub.add_parser('info'); i.add_argument('--recipe', default=str(RECIPES / 'firmware.json.xz'))
     a = ap.parse_args(argv)
     try:
         if a.cmd == 'build':

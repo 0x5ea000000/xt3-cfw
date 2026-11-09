@@ -13,10 +13,11 @@ All of it lives in memory that official firmware leaves unused (a 104 KiB room a
 - **Film rows.** The four film lists (film menu, Q menu, I.Q. menu, the custom-setting editor) get 16 more entries. Choosing one stores PRO Neg. Std plus a RAM-only marker; the colour pipeline then applies that row's 16×16×16 table to JPEGs and live view, which official firmware already supports but leaves at identity.
 - **Text and icons.** Official text and icon lookups reject ids past their own range. Small wrappers answer our ids (names, descriptions, sizes, style overrides) and pass every other id to the official code unchanged.
 - **RAW CONVERSION** lists the rows and develops with the chosen row's table.
+- **Photos remember their row.** A photo shot on a row is marked with FilmMode `0x901..0x910` (PRO Neg. Std is `0x500`). Playback and the shooting info screens show the row's own icon, and RAW CONVERSION of that photo uses its row whatever the camera is set to. Official firmware (no card) shows such photos without a film icon.
 
 ## The recipe
 
-`firmware/recipes/p02f.json.xz` turns the official image into the tested firmware with three kinds of step:
+`firmware/recipes/firmware.json.xz` turns the official image into the tested firmware with three kinds of step:
 
 | Step | Holds |
 | --- | --- |

@@ -28,7 +28,7 @@ def spans(r):
 
 class Recipes(unittest.TestCase):
     def test_firmware_recipe(self):
-        r = load('p02f.json.xz')
+        r = load('firmware.json.xz')
         self.assertEqual(r['base']['sha256'], X.FUJIMOD['ffboot.bin'])
         self.assertEqual(set(r['outputs']), CARD_FILES)
         self.assertTrue((RECIPES / r['fast_loader']).exists())
@@ -56,7 +56,7 @@ class Recipes(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('XT3_RECOVERY_ZIP'), 'set XT3_RECOVERY_ZIP to also build from FujiMod\'s recovery zip')
     def test_full_build(self):
         with tempfile.TemporaryDirectory() as d:
-            X.build(os.environ['XT3_RECOVERY_ZIP'], Path(d) / 'out', RECIPES / 'p02f.json.xz')
+            X.build(os.environ['XT3_RECOVERY_ZIP'], Path(d) / 'out', RECIPES / 'firmware.json.xz')
             sums = (Path(d) / 'out' / 'SHA256SUMS').read_text().split('\n')
             self.assertEqual(len([s for s in sums if s]), len(CARD_FILES))
 

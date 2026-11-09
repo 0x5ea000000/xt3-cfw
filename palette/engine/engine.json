@@ -1,10 +1,10 @@
 {
-  "id": "official-p02f",
-  "label": "P02f: official X-T3 5.11 with 16 film rows (camera tested). Built by tools/xt3_build.py into build/",
+  "id": "official-p03",
+  "label": "P03: official X-T3 5.11 with 16 film rows, playback icons and photo marking (camera tested). Built by tools/xt3_build.py into build/",
   "ffboot": "build/standard/ffboot.bin",
-  "ffboot_sha256": "091852273e19849de0f772578dd51ca77718f36d127f44ed1911e223029b3ba8",
+  "ffboot_sha256": "b8a254d55f0e7cf886736d0752bbf447d4ca12f28451e0aaf1a115af6bebb08f",
   "ffinit": "build/standard/ffinit.bin",
-  "ffinit_sha256": "527088af273d9253a956d8d75b2f5bb12f780bce33e4eeed598d10fb76b6af6f",
+  "ffinit_sha256": "12daa41998dd20ba14dc65202f91994dde9371c115f225478d5eba8e9630f7eb",
   "fast": {
     "ffinit": "build/fast-loader.bin",
     "ffinit_sha256": "46830992226a14ba8fa16a220f3f16007df7e2673e66f1f5c552b501f5e92d5d",

@@ -85,7 +85,7 @@ class Baseline(unittest.TestCase):
         self.assertTrue(G.self_check(ENG))
 
     def test_engine_pinned(self):
-        self.assertEqual(G.sha256(ENG.image()), '091852273e19849de0f772578dd51ca77718f36d127f44ed1911e223029b3ba8')   # P02f, official 5.11 port
+        self.assertEqual(G.sha256(ENG.image()), 'b8a254d55f0e7cf886736d0752bbf447d4ca12f28451e0aaf1a115af6bebb08f')   # P03, official 5.11 port
 
     def test_order_round_trip(self):
         self.assertEqual(G.from_camera(G.to_camera(OTHER)), OTHER)
