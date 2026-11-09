@@ -13,7 +13,7 @@ Status: tested on one X-T3 with official 5.11 inside. See [what has been tested]
 ## What you need
 
 1. A Fujifilm **X-T3** on official firmware **5.11**.
-2. **FujiMod's X-T3 5.11 recovery SD boot zip.** Make it on FujiMod's site from Fujifilm's own 5.11 firmware download. It holds the official firmware image and FujiMod's SD-boot loader. This repository contains no Fujifilm or FujiMod files; the build checks yours by SHA-256 and refuses anything else.
+2. **FujiMod's X-T3 5.11 recovery SD boot zip** (https://fujimod.com/recovery/). Make it on FujiMod's site from Fujifilm's own 5.11 firmware download. It holds the official firmware image and FujiMod's SD-boot loader. This repository contains no Fujifilm or FujiMod files; the build checks yours by SHA-256 and refuses anything else.
 3. Python 3.10 or newer. The firmware build uses the standard library only.
 
 ## Build the card files
@@ -73,8 +73,6 @@ Fujifilm, X-T3 and the film simulation names are Fujifilm's. This project is not
 ## Credits
 
 - **[FujiMod](https://github.com/justjake/fujimod)**: SD boot on Fujifilm cameras, and the X-T3 recovery card this builds on.
-- **Haipro**: the initial custom firmware work on the X-T3, where this project began.
+- **Haipro**: the initial custom firmware work on the X-T3.
 
 Our cfw builds on, and continues to incorporate, the research and work they started.
-
-Lato by Łukasz Dziedzic.
