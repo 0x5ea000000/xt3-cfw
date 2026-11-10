@@ -37,7 +37,7 @@ def recipe_ok(rel, data):
     if r.get('format') != 'xt3-recipe-1' or not re.fullmatch(r'[0-9a-f]{64}', r.get('target', {}).get('sha256', '')):
         return [f'{rel}: not an xt3-recipe-1 with a pinned target']
     kinds = {o.get('op') for o in r.get('ops', [])}
-    return [] if kinds <= {'own', 'copy', 'icons'} else [f'{rel}: unknown steps {kinds}']
+    return [] if kinds <= {'own', 'copy', 'icons', 'x4copy', 'x4derive'} else [f'{rel}: unknown steps {kinds}']
 
 
 def main():

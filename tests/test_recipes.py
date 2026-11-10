@@ -1,6 +1,7 @@
 """Recipe tests that need no firmware: structure, pins, and that steps cannot overlap or run outside the image.
 
-With XT3_RECOVERY_ZIP set to FujiMod's X-T3 5.11 recovery zip, also builds everything and checks the pinned outputs.
+With XT3_RECOVERY_ZIP set to FujiMod's X-T3 5.11 recovery zip and XT3_X4_DAT to Fujifilm's X-T4 2.12 FWUP0024.DAT, also builds
+everything and checks the pinned outputs.
 Run: python3 -m unittest discover -s tests
 """
 import base64, json, lzma, os, sys, tempfile, unittest
@@ -39,6 +40,11 @@ class Recipes(unittest.TestCase):
         for op in r['ops']:
             if op['op'] == 'copy':                            # copies come from the official image itself, never past it
                 self.assertLessEqual(op['src'] + op['n'], r['base']['size'])
+            if op['op'] == 'x4copy':                          # Fujifilm bytes come from the user's X-T4 file, never from the recipe
+                self.assertIn(op['src'], ('x4dat',) + tuple(X.X4_OBJECTS))
+                self.assertEqual(len(op['sha256']), 64)
+            if op['op'] == 'x4derive':
+                self.assertIn(op['what'], ('grain', 'fx_T1', 'fx_T2', 'fx_T3', 'fx_T4'))
             if op['op'] == 'own' and op['at'] < r['base']['size'] and 'old' not in op:
                 self.assertTrue(0x1509000 <= op['at'] < 0x1523000, f'own bytes on official code at {op["at"]:#x} without an old-bytes check')
 
@@ -53,10 +59,11 @@ class Recipes(unittest.TestCase):
         fi, small = X.fast_pair(bytes(40808), img)
         self.assertEqual(len(small), 0x1000 + 0x1000 + 0x2000)
 
-    @unittest.skipUnless(os.environ.get('XT3_RECOVERY_ZIP'), 'set XT3_RECOVERY_ZIP to also build from FujiMod\'s recovery zip')
+    @unittest.skipUnless(os.environ.get('XT3_RECOVERY_ZIP') and os.environ.get('XT3_X4_DAT'),
+                         'set XT3_RECOVERY_ZIP and XT3_X4_DAT to also build from FujiMod\'s recovery zip and the X-T4 file')
     def test_full_build(self):
         with tempfile.TemporaryDirectory() as d:
-            X.build(os.environ['XT3_RECOVERY_ZIP'], Path(d) / 'out', RECIPES / 'firmware.json.xz')
+            X.build(os.environ['XT3_RECOVERY_ZIP'], Path(d) / 'out', RECIPES / 'firmware.json.xz', os.environ['XT3_X4_DAT'])
             sums = (Path(d) / 'out' / 'SHA256SUMS').read_text().split('\n')
             self.assertEqual(len([s for s in sums if s]), len(CARD_FILES))
 

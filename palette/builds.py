@@ -13,7 +13,7 @@ def row_payload(slug):
     G.require(k['status'] == 'fitted' and k.get('table_sha256'), f"{k['name']} has no fitted table")
     tb = L.table(slug)
     G.require(G.sha256(tb) == k['table_sha256'], f"{k['name']}: table file changed since it was fitted")
-    return dict(name=k['menu_name'], lines=k['lines'], lut=tb, icon=L.icon_of(k))
+    return dict(name=k['menu_name'], lines=k['lines'], lut=tb, icon=L.icon_of(k), base=k.get('base', 'PRO Neg. Std'), plain=bool(k.get('plain')))
 
 
 def fingerprint(rows):
@@ -24,7 +24,7 @@ def fingerprint(rows):
             k = L.get(slug)
         except KeyError:
             return None
-        parts.append(json.dumps([k.get('table_sha256'), k['menu_name'], k['lines'], L.icon_of(k)]))
+        parts.append(json.dumps([k.get('table_sha256'), k['menu_name'], k['lines'], L.icon_of(k)] + ([k['base']] if k.get('base', 'PRO Neg. Std') != 'PRO Neg. Std' else [])))
     return G.sha256('|'.join(parts).encode())
 
 
@@ -74,6 +74,7 @@ def build(eng, rows, label=None):
     for b, r in zip(back, payload):
         G.require(b['name'] == r['name'] and b['lines'] == list(r['lines']) and b['table_sha256'] == G.sha256(r['lut']), 'row read-back mismatch')
         G.require(b['icons'] == G.icons_for(r['icon']), 'row icon read-back mismatch')
+        G.require(not eng.film_base or (b['base'] == r['base'] and b['plain'] == r['plain']), 'row base film read-back mismatch')
     sha = G.sha256(image)
     for m in all_builds():
         if m['ffboot_sha256'] == sha:

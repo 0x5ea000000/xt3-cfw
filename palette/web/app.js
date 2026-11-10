@@ -269,9 +269,12 @@ function textPanel(k, slug) {
   const name = h('input', { value: k.menu_name, maxlength: S.engine.name_max });
   const ls = k.lines.map(t => h('input', { value: t, maxlength: S.engine.line_max }));
   const inRow = S.rows.includes(slug);
+  if (k.builtin) return h('section', { class: 'panel' }, h('p', { class: 'muted', style: 'margin:0' }, `${k.name} is the camera's own film on a row: no table, nothing to change. Its photos are marked as ${k.name}.`));
+  const base = S.engine.bases ? h('select', {}, S.engine.bases.map(b => h('option', { value: b, selected: b === (k.base || 'PRO Neg. Std') }, b))) : null;
   return h('details', { class: 'panel' }, h('summary', {}, 'Name, description and removal'), h('div', { style: 'margin-top:14px;max-width:560px' },
     h('label', {}, 'Name on the camera', name), ls.map((l, i) => h('label', {}, `Description line ${i + 1}`, l)),
-    h('div', { class: 'row spread' }, h('button', { onclick: guard(async () => { await api(`/api/looks/${slug}`, { method: 'PATCH', json: { menu_name: name.value, lines: ls.map(l => l.value) } }); await refresh(); toast('Saved. Build again to put it on the card.'); }) }, 'Save'),
+    base ? h('label', {}, 'Base film', base, h('span', { class: 'small muted' }, 'The table is applied on top of this film. Tables are fitted on PRO Neg. Std, so on another base the look will differ from its fit.')) : null,
+    h('div', { class: 'row spread' }, h('button', { onclick: guard(async () => { await api(`/api/looks/${slug}`, { method: 'PATCH', json: Object.assign({ menu_name: name.value, lines: ls.map(l => l.value) }, base ? { base: base.value } : {}) }); await refresh(); toast('Saved. Build again to put it on the card.'); }) }, 'Save'),
       h('button', { class: 'danger', disabled: inRow, title: inRow ? 'Take it off its row first' : null, onclick: guard(async () => {
         if (!confirm(`Remove ${k.name} and its table from the library?`)) return;
         await api(`/api/looks/${slug}`, { method: 'DELETE' }); view = looks; location.hash = '#/looks'; await refresh(); }) }, 'Remove look'))));

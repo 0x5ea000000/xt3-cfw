@@ -70,10 +70,10 @@ def web(name):
 
 @app.get('/api/state')
 def state():
-    looks = [look_public(k) for k in L.all_looks()]
+    looks = [look_public(k) for k in L.all_looks()] + ([look_public(L.get(s)) for s in L.FILMS] if ENG.film_base else [])
     bl = B.all_builds(); rows = B.padded(ENG, L.rows())
     fp = B.fingerprint(rows); current = next((m for m in bl if m.get('fingerprint') == fp and m.get('engine') == ENG.id), None)
-    return jsonify(engine=dict(ENGINE_STATUS, id=ENG.id, rows=ENG.rows, slots=ENG.slots, name_max=ENG.name_max, line_max=ENG.line_max), looks=looks, rows=rows, builds=bl, current_build=current['id'] if current else None,
+    return jsonify(engine=dict(ENGINE_STATUS, id=ENG.id, rows=ENG.rows, slots=ENG.slots, name_max=ENG.name_max, line_max=ENG.line_max, bases=list(G.BASE_FILMS) if ENG.film_base else None), looks=looks, rows=rows, builds=bl, current_build=current['id'] if current else None,
                    base=X.check_base(), active=J.active(), photos=len(X.stems()), photos_folder=str(L.PHOTOS))
 
 
@@ -111,6 +111,12 @@ def edit_look(slug):
     k = L.get(slug); b = request.get_json(); t = text_fields(b)
     G.check_text(ENG, t['menu_name'], t['lines'])
     k.update(t)
+    if b.get('base'):
+        if b['base'] not in G.BASE_FILMS:
+            raise ValueError('Base film is PRO Neg. Std, Classic Neg. or Bleach Bypass.')
+        if b['base'] != 'PRO Neg. Std' and not ENG.film_base:
+            raise G.EngineError('This firmware builds every row on PRO Neg. Std.')
+        k['base'] = b['base']
     if b.get('name'):
         k['name'] = b['name'].strip()
     if b.get('lightroom_look'):

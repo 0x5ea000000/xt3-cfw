@@ -12,6 +12,22 @@ FIT_DIR = ROOT / 'research' / 'claude-look-fit'
 ROWS = LIBRARY / 'rows.json'
 
 
+# Plain films the firmware can put on a row (engines with a base film choice): the identity table on that base.
+FILMS = {
+    'film-classic-neg': dict(name='Classic Neg.', menu_name='CLASSIC Neg.', lines=['Classic Negative', 'Hard tonality, muted colour', 'Film simulation'],
+                             base='Classic Neg.', icon='CN'),
+    'film-bleach-bypass': dict(name='Bleach Bypass', menu_name='BLEACH BYP.', lines=['Eterna Bleach Bypass', 'Muted colour, high contrast', 'Film simulation'],
+                               base='Bleach Bypass', icon='BB'),
+}
+
+
+def builtin(slug):
+    import engine as G
+    f = FILMS[slug]
+    return dict(f, slug=slug, builtin=True, plain=True, status='fitted', table_sha256=G.sha256(G.identity_table()), fit=None, created=0,
+                lightroom_look=None, preset=None, exports_dir='', error=None)
+
+
 def slugify(s):
     return re.sub(r'[^a-z0-9]+', '-', s.lower()).strip('-')[:40] or 'look'
 
@@ -27,6 +43,8 @@ def work_dir(slug):
 
 
 def save(look):
+    if look.get('builtin'):
+        raise ValueError('A built-in film cannot be changed.')
     d = look_dir(look['slug']); d.mkdir(parents=True, exist_ok=True)
     tmp = d / 'look.json.tmp'
     tmp.write_text(json.dumps(look, indent=1) + '\n'); tmp.replace(d / 'look.json')
@@ -34,6 +52,8 @@ def save(look):
 
 
 def get(slug):
+    if slug in FILMS:
+        return builtin(slug)
     p = look_dir(slug) / 'look.json'
     if not p.exists():
         raise KeyError(slug)
@@ -54,7 +74,7 @@ def exports_dir(look):
 
 def create(name, menu_name, lines, lightroom_look=None, preset=None):
     slug = base = slugify(name); n = 2
-    while (LIBRARY / slug).exists():
+    while (LIBRARY / slug).exists() or slug in FILMS:
         slug = f'{base}-{n}'; n += 1
     folder = PHOTOS / f'lightroom_{slug}'
     try:
@@ -89,6 +109,9 @@ def icon_of(look):
 
 
 def table(slug):
+    if slug in FILMS:
+        import engine as G
+        return G.identity_table()
     return (look_dir(slug) / 'lut16.bin').read_bytes()
 
 

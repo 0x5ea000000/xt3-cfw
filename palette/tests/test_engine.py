@@ -85,7 +85,15 @@ class Baseline(unittest.TestCase):
         self.assertTrue(G.self_check(ENG))
 
     def test_engine_pinned(self):
-        self.assertEqual(G.sha256(ENG.image()), 'b8a254d55f0e7cf886736d0752bbf447d4ca12f28451e0aaf1a115af6bebb08f')   # P03, official 5.11 port
+        self.assertEqual(G.sha256(ENG.image()), '8c4c5b931d3ccef1dd71f44bb38c2691b1e7bb502465d1ddfff2830903875b90')   # P05b, official 5.11 port
+
+    def test_reserved_firmware_data_kept_and_summed(self):
+        # P05b keeps the cfw's CN/BB names and icons in the store tail: a build must keep them, and the store sum must cover them
+        lo, hi = ENG.reserved
+        im = G.apply(ENG, rows(*LOOKS))
+        self.assertEqual(im[lo:hi], ENG.image()[lo:hi])
+        self.assertTrue(any(im[lo:hi]))
+        G.check_store_sum(ENG, im)
 
     def test_order_round_trip(self):
         self.assertEqual(G.from_camera(G.to_camera(OTHER)), OTHER)
@@ -234,6 +242,63 @@ class Refusals(unittest.TestCase):
         b = bytearray(G.apply(ENG, rows(LOOKS[0]))); b[ENG.store + 7] ^= 1
         with self.assertRaises(G.EngineError):
             G.check_store_sum(ENG, bytes(b))
+
+
+P04 = G.HERE / 'engine' / 'engine-p04.json'
+
+
+@unittest.skipUnless(P04.exists() and (G.ROOT / 'builds/p04-official-cn-bb-grain/ffboot.bin').exists(), 'P04 build not here')
+class BaseFilm(unittest.TestCase):
+    """P04 on: a base film per row (PRO Neg. Std, Classic Neg., Bleach Bypass) and the photo code of a plain film row, as data."""
+    @classmethod
+    def setUpClass(cls):
+        cls.eng = G.Engine(P04); im = cls.eng.image()
+        cls.rows = G.read_rows(cls.eng, lambda a, n: im[a:a + n])
+
+    def test_rebuilds_p04_byte_exact(self):
+        self.assertTrue(G.self_check(self.eng))
+        self.assertEqual([(r['base'], r['plain']) for r in self.rows[14:]], [('Classic Neg.', True), ('Bleach Bypass', True)])
+
+    def test_look_on_classic_neg_is_data_only(self):
+        r = list(self.rows); r[2] = dict(r[2], base='Classic Neg.', plain=False)
+        im = G.apply(self.eng, r)
+        self.assertEqual(G.check_diff(self.eng, im), 1)
+        back = G.read_rows(self.eng, lambda a, n: im[a:a + n])
+        self.assertEqual((back[2]['base'], back[2]['plain']), ('Classic Neg.', False))
+
+    def test_plain_needs_film_base_and_identity(self):
+        for i, change in ((0, dict(plain=True)), (2, dict(plain=True, base='Classic Neg.'))):
+            r = list(self.rows); r[i] = dict(r[i], **change)
+            with self.assertRaises(G.EngineError):
+                G.apply(self.eng, r)
+
+    def test_hidden_rows_get_no_base(self):
+        im = G.apply(self.eng, self.rows[14:] + [None] * 14)
+        fb = self.eng.film_base
+        self.assertEqual(im[fb['bases'] + 1:fb['bases'] + 3], bytes([10, 11]))
+        self.assertFalse(any(im[fb['bases'] + 3:fb['bases'] + 17]))
+        self.assertEqual(struct.unpack_from('<3H', im, fb['fmodes']), (0x500, 0x800, 0x900))
+
+    def test_unknown_base_refused(self):
+        r = list(self.rows); r[0] = dict(r[0], base='Velvia')
+        with self.assertRaises(G.EngineError):
+            G.apply(self.eng, r)
+
+    def test_builtin_films(self):
+        for slug, base in (('film-classic-neg', 'Classic Neg.'), ('film-bleach-bypass', 'Bleach Bypass')):
+            k = L.get(slug)
+            self.assertEqual((k['base'], k['plain'], k['table_sha256']), (base, True, G.sha256(G.identity_table())))
+            self.assertEqual(L.table(slug), G.identity_table())
+            G.check_text(self.eng, k['menu_name'], k['lines'])
+            with self.assertRaises(ValueError):
+                L.save(k)
+
+
+class NoBaseOnP03(unittest.TestCase):
+    def test_base_refused_without_film_base(self):
+        r = [dict(name='A', lines=['a', 'b', 'c'], lut=OTHER, icon='AA', base='Classic Neg.')]
+        with self.assertRaises(G.EngineError):
+            G.apply(ENG, rows(*r))
 
 
 class NoDat(unittest.TestCase):

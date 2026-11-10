@@ -18,6 +18,8 @@ FFINIT_SIZE = 40808
 FAST_START, FAST_END = 0x3000, 0x4000                   # the fast loader's room in ffinit; its segment table ends the room
 FAST_MIN_RUN, FAST_PAGE, FAST_FIRST, FAST_STRIDE = 0x10000, 0x1000, 0x1000, 16     # as tools/build_ffboot_compact.py and tools/build_fast_sd.py
 END_KEY = 0x7FFFFFFE
+BASE_FILMS = {'PRO Neg. Std': 0, 'Classic Neg.': 10, 'Bleach Bypass': 11}   # base film -> processing id (P04 on); rows store PRO Neg. Std
+FILM_CODE = {10: 0x800, 11: 0x900}                                           # photo FilmMode of a plain Classic Neg. / Bleach Bypass row
 UI_FIRST = 24
 LIST_COUNT = 4                                          # four key tables feed the five film lists and the Q list
 NAME_CHARS = re.compile(r'^[A-Za-z0-9 .+/&\'-]+$')       # characters already drawn by the menus in stock English strings
@@ -57,6 +59,11 @@ class Engine:
         s.name_style = c.get('name_style', 0)            # line style of the row names: 2 = stock film-name style (test 53 on)
         r = c.get('raw_list')                            # RAW CONVERSION's film list copy (test 52 on): stock keys, the rows, extra rows
         s.raw_list = dict(keys=int(r['keys'], 16), rows=int(r['rows'], 16), first=r['first'], extra=list(r['extra'])) if r else None
+        b = c.get('film_base')                           # P04 on: base film per row (u8 by row) and photo FilmMode per row (u16 by row)
+        s.film_base = dict(bases=int(b['bases'], 16), fmodes=int(b['fmodes'], 16)) if b else None
+        v = c.get('reserved')                            # P05 on: firmware data at the store's end (the cfw's CN/BB names and icons); kept as is
+        s.reserved = tuple(int(a, 16) for a in v) if v else None
+        require(not s.reserved or s.store < s.reserved[0] < s.reserved[1] <= s.store_end, 'reserved range must sit in the store')
 
     def image(s):
         if s._image is None:
@@ -130,6 +137,13 @@ class Engine:
         return s._keys
 
 
+def identity_table():
+    g = np.arange(16, dtype=np.uint8) * 17
+    a = np.zeros((16, 16, 16, 3), np.uint8)
+    a[..., 0] = g[:, None, None]; a[..., 1] = g[None, :, None]; a[..., 2] = g[None, None, :]
+    return a.tobytes()
+
+
 def to_camera(lut):
     """lut16.bin (R, G, B nested, R slowest) to camera order, field 0 = red, red index fastest."""
     a = np.frombuffer(lut, np.uint8).reshape(16, 16, 16, 3)
@@ -187,7 +201,7 @@ def icon_region(eng, rows):
             blob += d + bytes(-len(d) % 16)
         first = first or mine
         recs += mine
-    require(eng.icons + len(blob) <= eng.store_end, 'icons do not fit the store')
+    require(eng.icons + len(blob) <= (eng.reserved[0] if eng.reserved else eng.store_end), 'icons do not fit the store')
     return bytes(blob), b''.join(recs)
 
 
@@ -216,12 +230,19 @@ def apply(eng, rows):
     for r in rows[:shown]:
         check_text(eng, r['name'], r['lines'])
         require(len(r['lut']) == TABLE_SIZE, 'table must be 12,288 bytes')
+        require(r.get('base', 'PRO Neg. Std') in BASE_FILMS, f"unknown base film {r.get('base')}")
+        require(eng.film_base or r.get('base', 'PRO Neg. Std') == 'PRO Neg. Std', 'this firmware builds every row on PRO Neg. Std')
+        require(not r.get('plain') or (r.get('base') != 'PRO Neg. Std' and r['lut'] == identity_table()),
+                'a plain film row needs a Classic Neg. or Bleach Bypass base and the identity table')
     image = bytearray(eng.image())
     store = bytearray(eng.store_end - eng.store)
     for i, r in enumerate(rows[:shown]):
         store[i * TABLE_SIZE:(i + 1) * TABLE_SIZE] = to_camera(r['lut'])
     blob, recs = icon_region(eng, rows)
     store[eng.icons - eng.store:eng.icons - eng.store + len(blob)] = blob
+    if eng.reserved:                                     # firmware data in the store: copied from the approved image, inside the sum
+        lo, hi = eng.reserved
+        store[lo - eng.store:hi - eng.store] = image[lo:hi]
     image[eng.store:eng.store_end] = store
     struct.pack_into('<I', image, eng.sum_at(), word_sum(store))
     require(len(recs) == 12 * 5 * eng.rows, 'icon record count')
@@ -229,6 +250,13 @@ def apply(eng, rows):
     blob = text_blob(eng, [r or rows[0] for r in rows])     # hidden rows keep valid entries, unreachable from the menus
     image[eng.text:eng.end] = bytes(eng.end - eng.text)
     image[eng.text:eng.text + len(blob)] = blob
+    if eng.film_base:                                    # rows 1..16 of the base and FilmMode tables; entry 0 stays
+        fb = eng.film_base
+        for i in range(eng.rows):
+            r = rows[i] if i < shown else None
+            pid = BASE_FILMS[r.get('base', 'PRO Neg. Std')] if r else 0
+            image[fb['bases'] + 1 + i] = pid
+            struct.pack_into('<H', image, fb['fmodes'] + 2 * (1 + i), FILM_CODE[pid] if r and r.get('plain') else 0)
     if shown < eng.rows:
         for a in eng.key_tables():
             term = image[a + 8 * eng.rows:a + 8 * eng.rows + 8]
@@ -248,6 +276,9 @@ def apply(eng, rows):
 def allowed_ranges(eng):
     r = [(eng.store, eng.store_end), (eng.text, eng.end), (eng.sum_at(), eng.sum_at() + 4), (eng.records, eng.records + 12 * 5 * eng.rows)]
     r += [(a, a + 8 * (eng.rows + 1)) for a in eng.key_tables()]
+    if eng.film_base:
+        fb = eng.film_base
+        r += [(fb['bases'] + 1, fb['bases'] + 1 + eng.rows), (fb['fmodes'] + 2, fb['fmodes'] + 2 + 2 * eng.rows)]
     if eng.raw_list:
         R, n = eng.raw_list, eng.raw_list_check()
         r += [(R['keys'] + 8 * R['first'], R['keys'] + 8 * (n + 1)), (R['rows'] + 48 * R['first'], R['rows'] + 48 * n)]
@@ -382,7 +413,16 @@ def read_rows(eng, get):
             require(eng.icons <= at < eng.store_end, 'icon record points outside the store')
             d = get(at, min(0x8000, eng.store_end - at))
             icons[k] = bytes(d[:I.gvff_end(d)])
-        rows.append({'name': lines[0], 'lines': lines[1:], 'lut': from_camera(tbl), 'table_sha256': sha256(from_camera(tbl)), 'icons': icons})
+        row = {'name': lines[0], 'lines': lines[1:], 'lut': from_camera(tbl), 'table_sha256': sha256(from_camera(tbl)), 'icons': icons}
+        if eng.film_base:
+            fb = eng.film_base
+            pid = get(fb['bases'] + 1 + i, 1)[0]
+            name = [k for k, v in BASE_FILMS.items() if v == pid]
+            require(len(name) == 1, f'row {i + 1}: unknown base id {pid}')
+            code = struct.unpack('<H', get(fb['fmodes'] + 2 * (1 + i), 2))[0]
+            require(code in (0, FILM_CODE.get(pid)), f'row {i + 1}: unexpected FilmMode {code:#x}')
+            row.update(base=name[0], plain=bool(code))
+        rows.append(row)
     return rows
 
 

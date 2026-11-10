@@ -6,12 +6,16 @@ official image (`ffboot.bin`, with FujiMod's SD-boot bytes) and FujiMod's loader
 Nothing of Fujifilm's or FujiMod's is in this repository: the recipes hold only our own bytes, plus steps that copy short pieces
 from the user's official image and draw the row icons from its stock icon templates.
 
+Some recipes also need Fujifilm's X-T4 firmware 2.12 (`FWUP0024.DAT`, free from Fujifilm's X-T4 download page): the cfw's Classic
+Neg., Bleach Bypass, FX Blue and large-grain values, their names and icons are Fujifilm's, so the build reads them from that file
+(copy steps, and two tables computed from its values) instead of the recipe holding them. The camera never sees the X-T4 file.
+
 Output (each pinned by SHA-256, so the result is exactly the firmware tested on the camera):
   standard/ffboot.bin, standard/ffinit.bin   full image, FujiMod's loader with its three fields set; boots in about 95 s
   fast/ffboot.bin, fast/ffinit.bin           the image without its long zero runs, our fast loader; boots in about 5 s
 Both need Fn1 + rear dial at power-on on a camera with official firmware. Nothing here writes to a card or the camera.
 
-Usage: python3 tools/xt3_build.py build <recovery zip> <new output dir> [--recipe firmware/recipes/firmware.json.xz]
+Usage: python3 tools/xt3_build.py build <recovery zip> <new output dir> [--x4 FWUP0024.DAT] [--recipe firmware/recipes/firmware.json.xz]
        python3 tools/xt3_build.py info [--recipe ...]
 """
 import argparse, base64, hashlib, json, lzma, re, struct, sys, zipfile, zlib
@@ -21,6 +25,13 @@ ROOT = Path(__file__).resolve().parent.parent
 RECIPES = ROOT / 'firmware' / 'recipes'
 FUJIMOD = {'ffboot.bin': 'f6663ddab658b9bcdff2cb43e91697e475965ed2682fe4571bab2ac3d4ed57df',
            'ffinit.bin': 'c51adc5290e776a38112e2549ff6c6928883d8557a223f210bcf48e75d4a0808'}
+X4_DAT = '853d273b5603d3a2b93493f0ebd6a762b0b4b6bdc70317777775ae5f8ed93bc5'   # Fujifilm X-T4 firmware 2.12, FWUP0024.DAT
+X4_OBJECTS = {   # packed objects of the X-T4 DAT: flash offset, flash size, SHA-256 of the unpacked object
+    'x4obj1': (0x1A00000, 0x340000, 'b1a6146fc89394e7c47a2bd5b0e92c07de085567da3aa8d6198bc1a32de9eec6'),     # resources (icons)
+    'x4obj5': (0x260000, 0x360000, '0b5b0fb0ee5fe6b109dae9964b5cddfe18edab46b4a0c195f9da194448906eeb'),
+    'x4obj6': (0x5C0000, 0x520000, 'e1ef8b30903d3078fde103cdd134fca7bfc4337d67bcaf55c3080ffd5fd93b13'),
+    'x4obj7': (0xAE0000, 0x480000, '6c8d7b8b0a37df8c2b636c504c07a80318243b313d5bf435e2c39ef3f56e9f80')}
+X4_CFG, X4_CFG_N, X6_BASE = 0xC0274, 0x72000, 0x1E0F000                   # parameter backup in the DAT; object 6's RAM address
 INIT_FIELDS, FAST_TABLE, FAST_END = 0x4784, 0x3E10, 0x4000
 MIN_RUN, PAGE, FIRST, STRIDE = 0x10000, 0x1000, 0x1000, 16
 
@@ -51,6 +62,73 @@ def read_inputs(zip_path):
     return out
 
 
+def decode_packed(raw, start, end):
+    """Fujifilm's packed objects (method 4: literal runs and back references in 16 KiB input blocks). Bytes are stored inverted."""
+    buf = raw[start:end].translate(bytes(255 - i for i in range(256)))
+    dlen, clen, count, block, method = struct.unpack_from('<5I', buf)
+    need(method == 4 and block == 0x4000 and 20 <= clen <= len(buf) and count == (clen + block - 1) // block, 'packed object header')
+    out, c = bytearray(), 20
+    while c < clen:
+        t = buf[c]; c += 1
+        if t < 128:
+            need(t and c + t <= clen, 'packed object literal'); out += buf[c:c + t]; c += t
+        else:
+            w = (t & 127) << 8 | buf[c]; c += 1
+            n, d = w & 15, w >> 4
+            need(n and 0 < d <= len(out), 'packed object reference')
+            if d >= n:
+                out += out[-d:len(out) - d + n]
+            else:
+                for _ in range(n):
+                    out.append(out[-d])
+    need(len(out) == dlen, 'packed object size')
+    return bytes(out)
+
+
+class X4:
+    """Fujifilm's X-T4 2.12 firmware file, read only: the plain file and its packed objects, unpacked when a step needs them."""
+    def __init__(s, path):
+        raw = Path(path).read_bytes()
+        need(sha(raw) == X4_DAT, f'{path} is not Fujifilm\'s X-T4 firmware 2.12 (FWUP0024.DAT); SHA-256 {sha(raw)}')
+        s.raw, s._src = raw, {}
+
+    def src(s, name):
+        if name not in s._src:
+            if name == 'x4dat':
+                s._src[name] = s.raw.translate(bytes(255 - i for i in range(256)))
+            else:
+                f, n, want = X4_OBJECTS[name]
+                d = decode_packed(s.raw, f + 0x274, f + 0x274 + n)
+                need(sha(d) == want, f'X-T4 object {name} unpacked wrong')
+                s._src[name] = d
+        return s._src[name]
+
+    def cfg(s):
+        return s.src('x4dat')[X4_CFG:X4_CFG + X4_CFG_N]
+
+
+def x4_derive(x4, what):
+    """Two tables the cfw computes from X-T4 values: the large-grain values, and the FX Blue builders' four tables."""
+    cfg, x6 = x4.cfg(), x4.src('x4obj6')
+    word = lambda a, i: struct.unpack_from('<I', x6, a - X6_BASE + 4 * i)[0]
+    if what == 'grain':
+        vals = [cfg[word(0x25B2850, i)] for i in range(60)]
+        return struct.pack('<60h', *[v - 256 if v >= 128 else v for v in vals])
+    if what == 'fx_T2':
+        return x6[0x25ADFA0 - X6_BASE:0x25ADFA0 - X6_BASE + 9]
+
+    def rd(kind, o):
+        need(0 <= o < X4_CFG_N - 1, f'X-T4 table offset {o:#x}')
+        if kind == 'b':
+            return cfg[o]
+        u = cfg[o] | cfg[o + 1] << 8
+        return u if kind == 'u16' else ((u - 0x10000) if u & 0x8000 else u) & 0xFFFFFFFF
+    a, recs, words, kind = {'fx_T1': (0x25ADFBC, 8, 12, lambda i: 's16'), 'fx_T3': (0x25AE3EC, 9, 66, lambda i: 'b' if i % 11 < 3 else 's16'),
+                            'fx_T4': (0x25AE13C, 4, 6, lambda i: 'u16')}[what]
+    out = [word(a, r * words + i) if r == 0 else rd(kind(i), word(a, r * words + i)) for r in range(recs) for i in range(words)]
+    return struct.pack(f'<{len(out)}I', *out)
+
+
 def load_recipe(path):
     r = json.loads(lzma.decompress(Path(path).read_bytes()))
     need(r.get('format') == 'xt3-recipe-1', f'{path}: unknown recipe format')
@@ -70,8 +148,9 @@ def icons_blob(image, pairs):
     return bytes(blob)
 
 
-def apply(recipe, base):
-    """base (checked) + recipe -> target bytes, checked against the recipe's pinned hash."""
+def apply(recipe, base, x4=None):
+    """base (checked) + recipe -> target bytes, checked against the recipe's pinned hash. x4: X4, for recipes that need it."""
+    need(x4 is not None or not recipe.get('x4'), 'this firmware needs Fujifilm\'s X-T4 firmware 2.12 file: add --x4 FWUP0024.DAT')
     need(sha(base) == recipe['base']['sha256'] and len(base) == recipe['base']['size'], 'base is not the recipe\'s base')
     out = bytearray(base) + bytes(recipe['target']['size'] - len(base))
     for op in recipe['ops']:
@@ -85,6 +164,14 @@ def apply(recipe, base):
             src, n = op['src'], op['n']
             need(sha(base[src:src + n]) == op['sha256'], f'official bytes at {src:#x} are not the expected ones')
             out[at:at + n] = base[src:src + n]
+        elif op['op'] == 'x4copy':                            # a piece of the user's X-T4 file
+            d = x4.src(op['src'])[op['off']:op['off'] + op['n']]
+            need(sha(d) == op['sha256'], f'X-T4 bytes {op["src"]}:{op["off"]:#x} are not the expected ones')
+            out[at:at + len(d)] = d
+        elif op['op'] == 'x4derive':                          # a table computed from the X-T4 file's values
+            d = x4_derive(x4, op['what'])
+            need(sha(d) == op['sha256'] and len(d) == op['n'], f'X-T4 table {op["what"]} does not match')
+            out[at:at + len(d)] = d
         elif op['op'] == 'icons':
             d = icons_blob(base, op['pairs'])
             need(sha(d) == op['sha256'] and len(d) == op['n'], 'icons do not match: check the font (fonts/Lato-Bold.ttf)')
@@ -131,12 +218,14 @@ def fast_pair(fast_template, img):
     return bytes(t), small
 
 
-def build(zip_path, out_dir, recipe_path):
+def build(zip_path, out_dir, recipe_path, x4_path=None):
     out_dir = Path(out_dir)
     need(not out_dir.exists(), f'{out_dir} exists; give a new folder')
     boot, loader = read_inputs(zip_path)
     rec = load_recipe(recipe_path)
-    image = apply(rec, boot)
+    need(not rec.get('x4') or x4_path, 'this firmware needs Fujifilm\'s X-T4 firmware 2.12 file: add --x4 FWUP0024.DAT '
+                                       '(download it from Fujifilm\'s X-T4 firmware page; see README)')
+    image = apply(rec, boot, X4(x4_path) if rec.get('x4') else None)
     std = standard_loader(loader, image)
     fast_tpl = apply(load_recipe(Path(recipe_path).parent / rec['fast_loader']), loader)
     fi, small = fast_pair(fast_tpl, image)
@@ -157,13 +246,13 @@ def build(zip_path, out_dir, recipe_path):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     sub = ap.add_subparsers(dest='cmd', required=True)
-    b = sub.add_parser('build'); b.add_argument('zip'); b.add_argument('out')
+    b = sub.add_parser('build'); b.add_argument('zip'); b.add_argument('out'); b.add_argument('--x4', help='Fujifilm X-T4 2.12 FWUP0024.DAT')
     b.add_argument('--recipe', default=str(RECIPES / 'firmware.json.xz'))
     i = sub.add_parser('info'); i.add_argument('--recipe', default=str(RECIPES / 'firmware.json.xz'))
     a = ap.parse_args(argv)
     try:
         if a.cmd == 'build':
-            build(a.zip, a.out, a.recipe)
+            build(a.zip, a.out, a.recipe, a.x4)
         else:
             r = load_recipe(a.recipe)
             kinds = {}
