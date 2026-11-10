@@ -75,6 +75,6 @@ Fujifilm, X-T3 and the film simulation names are Fujifilm's. This project is not
 ## Credits
 
 - **[FujiMod](https://github.com/justjake/fujimod)**: SD boot on Fujifilm cameras, and the X-T3 recovery card this builds on.
-- **Haipro**: the initial custom firmware work on the X-T3.
+- **[0x5ea000000(haipro287)](https://github.com/0x5ea000000)**: the initial custom firmware work on the X-T3.
 
 Our cfw builds on, and continues to incorporate, the research and work they started.
