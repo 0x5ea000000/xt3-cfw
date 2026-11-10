@@ -41,6 +41,13 @@ The built firmware has 16 example rows: NEUTRAL 1 and 2 (no change) and 14 test 
 
 Before you start the camera without the card, set FILM SIMULATION to a stock film (for example PROVIA), GRAIN EFFECT to a stock value and COLOR CHROME FX BLUE to OFF. Official firmware does not know Classic Negative, Bleach Bypass, large grain or FX Blue; a photo setting it does not know most likely falls back to PROVIA, but that has not been tested in every menu.
 
+## Optional: start without buttons
+
+For people willing to flash: a small **flash stub** on official 5.11 makes a normal power-on start the card, with no Fn1 + rear dial.
+It is the only part of this project that flashes the camera. `python3 tools/xt3_build.py stub inputs/FWUP0019.DAT build-stub`
+makes it from Fujifilm's X-T3 5.11 file. Read [docs/optional-flash-stub.md](docs/optional-flash-stub.md) first: it has the
+recovery route and the way back.
+
 ## Palette: your own looks
 
 ```sh
@@ -64,6 +71,7 @@ The build starts from your official image and applies a recipe in `firmware/reci
 | Palette builds with fewer rows (9 looks) | camera (on the previous firmware) |
 | Every output of `tools/xt3_build.py` equals the tested files | checked on every build |
 | Fast loader on cards with files in pieces (exFAT, FAT32) | emulator |
+| Optional flash stub on official 5.11: normal power-on starts the card | camera (installed on one X-T3); 13 start-up cases in the emulator |
 
 Not tested yet: starting the camera without the card after leaving Classic Negative, Bleach Bypass, large grain or FX Blue selected (see above).
 

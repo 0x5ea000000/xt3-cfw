@@ -15,7 +15,11 @@ Output (each pinned by SHA-256, so the result is exactly the firmware tested on 
   fast/ffboot.bin, fast/ffinit.bin           the image without its long zero runs, our fast loader; boots in about 5 s
 Both need Fn1 + rear dial at power-on on a camera with official firmware. Nothing here writes to a card or the camera.
 
+Optional, for people willing to flash: `stub` makes the flash stub DAT from Fujifilm's own X-T3 5.11 DAT (FWUP0019.DAT). Installed with
+the camera's own updater, it lets a normal power-on start the card (no Fn1 + rear dial). Read docs/optional-flash-stub.md first.
+
 Usage: python3 tools/xt3_build.py build <recovery zip> <new output dir> [--x4 FWUP0024.DAT] [--recipe firmware/recipes/firmware.json.xz]
+       python3 tools/xt3_build.py stub <Fujifilm X-T3 5.11 FWUP0019.DAT> <new output dir>
        python3 tools/xt3_build.py info [--recipe ...]
 """
 import argparse, base64, hashlib, json, lzma, re, struct, sys, zipfile, zlib
@@ -25,6 +29,8 @@ ROOT = Path(__file__).resolve().parent.parent
 RECIPES = ROOT / 'firmware' / 'recipes'
 FUJIMOD = {'ffboot.bin': 'f6663ddab658b9bcdff2cb43e91697e475965ed2682fe4571bab2ac3d4ed57df',
            'ffinit.bin': 'c51adc5290e776a38112e2549ff6c6928883d8557a223f210bcf48e75d4a0808'}
+X3_DAT = '9f2c75fd8a16a1d71b9218f6dbd3144b1f11820bcecd3a9608c8cda9f25f95a3'   # Fujifilm X-T3 firmware 5.11, FWUP0019.DAT
+STUB_AREAS = ((0x20C, 4), (0x274 + 0x8A0, 4), (0x274 + 0x7300, 408))           # global checksum, setup literal, the stub (blank flash)
 X4_DAT = '853d273b5603d3a2b93493f0ebd6a762b0b4b6bdc70317777775ae5f8ed93bc5'   # Fujifilm X-T4 firmware 2.12, FWUP0024.DAT
 X4_OBJECTS = {   # packed objects of the X-T4 DAT: flash offset, flash size, SHA-256 of the unpacked object
     'x4obj1': (0x1A00000, 0x340000, 'b1a6146fc89394e7c47a2bd5b0e92c07de085567da3aa8d6198bc1a32de9eec6'),     # resources (icons)
@@ -243,16 +249,44 @@ def build(zip_path, out_dir, recipe_path, x4_path=None):
     print('Copy ffboot.bin first, then ffinit.bin, from fast/ (or standard/) to the top folder of an empty card.')
 
 
+def dat_checksum(raw):
+    return (sum(raw[0x210:]) + 0x06CBBFF5) & 0xFFFFFFFF
+
+
+def stub(dat_path, out_dir, recipe_path):
+    """Official X-T3 5.11 DAT + our stub -> the tested stub DAT. Only the three stub areas may change; the result is pinned."""
+    out_dir = Path(out_dir)
+    need(not out_dir.exists(), f'{out_dir} exists; give a new folder')
+    raw = Path(dat_path).read_bytes()
+    need(sha(raw) == X3_DAT, f'{dat_path} is not Fujifilm\'s official X-T3 firmware 5.11 (FWUP0019.DAT); SHA-256 {sha(raw)}')
+    rec = load_recipe(recipe_path)
+    out = apply(rec, raw)
+    keep = bytearray(len(raw))
+    for a, n in STUB_AREAS:
+        keep[a:a + n] = b'\1' * n
+    need(all(x == y or k for x, y, k in zip(raw, out, keep)), 'the stub recipe changes bytes outside the stub areas')
+    need(struct.unpack_from('<I', out, 0x20C)[0] == dat_checksum(out), 'global checksum')
+    out_dir.mkdir(parents=True)
+    (out_dir / 'FWUP0019.DAT').write_bytes(out)
+    (out_dir / 'SHA256SUMS').write_text(f'{sha(out)}  FWUP0019.DAT\n')
+    print(f'{rec["name"]}: built and checked')
+    print(f'  FWUP0019.DAT {len(out):>12,d} bytes  {sha(out)}')
+    print('This file is installed with the camera\'s firmware updater. Read docs/optional-flash-stub.md before you use it.')
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     sub = ap.add_subparsers(dest='cmd', required=True)
     b = sub.add_parser('build'); b.add_argument('zip'); b.add_argument('out'); b.add_argument('--x4', help='Fujifilm X-T4 2.12 FWUP0024.DAT')
     b.add_argument('--recipe', default=str(RECIPES / 'firmware.json.xz'))
     i = sub.add_parser('info'); i.add_argument('--recipe', default=str(RECIPES / 'firmware.json.xz'))
+    t = sub.add_parser('stub'); t.add_argument('dat'); t.add_argument('out'); t.add_argument('--recipe', default=str(RECIPES / 'stub-dat.json.xz'))
     a = ap.parse_args(argv)
     try:
         if a.cmd == 'build':
             build(a.zip, a.out, a.recipe, a.x4)
+        elif a.cmd == 'stub':
+            stub(a.dat, a.out, a.recipe)
         else:
             r = load_recipe(a.recipe)
             kinds = {}

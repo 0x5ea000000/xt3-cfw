@@ -48,6 +48,19 @@ class Recipes(unittest.TestCase):
             if op['op'] == 'own' and op['at'] < r['base']['size'] and 'old' not in op:
                 self.assertTrue(0x1509000 <= op['at'] < 0x1523000, f'own bytes on official code at {op["at"]:#x} without an old-bytes check')
 
+    def test_stub_recipe(self):                              # optional flash stub: only the three stub areas, each checked
+        r = load('stub-dat.json.xz')
+        self.assertEqual(r['base']['sha256'], X.X3_DAT)
+        self.assertEqual(r['target']['size'], r['base']['size'])
+        self.assertEqual(sorted((op['at'], len(base64.b64decode(op['data']))) for op in r['ops']), sorted(X.STUB_AREAS))
+        self.assertTrue(all(op['op'] == 'own' and 'old' in op for op in r['ops']))
+
+    @unittest.skipUnless(os.environ.get('XT3_DAT'), 'set XT3_DAT to Fujifilm\'s X-T3 5.11 FWUP0019.DAT to also build the stub')
+    def test_stub_build(self):
+        with tempfile.TemporaryDirectory() as d:
+            X.stub(os.environ['XT3_DAT'], Path(d) / 'out', RECIPES / 'stub-dat.json.xz')
+            self.assertEqual(X.sha((Path(d) / 'out' / 'FWUP0019.DAT').read_bytes()), load('stub-dat.json.xz')['target']['sha256'])
+
     def test_loader_recipe(self):
         r = load('fast-loader.json.xz')
         self.assertEqual(r['base']['sha256'], X.FUJIMOD['ffinit.bin'])
