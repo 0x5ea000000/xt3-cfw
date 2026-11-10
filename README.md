@@ -92,6 +92,7 @@ Fujifilm, X-T3 and the film simulation names are Fujifilm's. This project is not
 ## Credits
 
 - **[FujiMod](https://github.com/justjake/fujimod)**: SD boot on Fujifilm cameras, and the X-T3 recovery card this builds on.
-- **[0x5ea000000(haipro287)](https://github.com/0x5ea000000)**: the initial custom firmware work on the X-T3, including the Classic Negative, Bleach Bypass, Color Chrome FX Blue and large-grain code this firmware carries, shared with his permission.
+- **[0x5ea000000 (haipro287)](https://github.com/0x5ea000000)**: fixed and completed the initial custom firmware, porting the X-T4 tone curves and colour matrices for Classic Negative and Eterna Bleach Bypass, and kindly shared his work with this project.
+- **xRock3rr**: the original X-T3 custom firmware (Classic Negative, Eterna Bleach Bypass and Color Chrome FX Blue) and the reverse-engineering write-up that paved the way for us.
 
 Our cfw builds on, and continues to incorporate, the research and work they started.
